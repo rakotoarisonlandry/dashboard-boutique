@@ -1,6 +1,6 @@
 # Robia IoT — Dashboard boutique
 
-Application React pour les agents affectés à une ou plusieurs boutiques. Le compte doit déjà exister dans Robia ; les autorisations sont vérifiées par le backend.
+Application React pour les agents affectés à une ou plusieurs boutiques. Le compte doit déjà exister dans Robia et avoir été ajouté à l'équipe d'une boutique par le propriétaire (depuis l'administration, avec son adresse e-mail).
 
 ## Démarrer
 
@@ -13,10 +13,17 @@ Ouvrir l'adresse affichée (par défaut `http://localhost:5173`). L'API utilisé
 
 ## Fonctions
 
-Connexion Robia, sélection des boutiques autorisées, liste des rendez-vous et rafraîchissement toutes les 10 secondes lorsque la page est visible, confirmation/refus, vérification manuelle de référence et enregistrement de l'arrivée, et validation d'une récupération assistée après vérification physique de la CIN et du dossier. La caméra et le scan QR ne sont pas encore intégrés.
+- **Agenda du jour** et des 6 jours suivants, en frise horaire (`?date=` côté API), avec filtres par statut.
+- **File « À traiter »** : toutes les demandes en attente, triées par heure de rendez-vous.
+- **En direct** : rafraîchissement toutes les 10 secondes quand l'onglet est visible, alerte à chaque nouvelle demande.
+- **Actions** : confirmer, refuser, enregistrer l'arrivée (« Client arrivé »), puis envoyer au client un retour « traité / non traité » avec un message (notification sur son téléphone).
+- **Vérifier un ticket** par sa référence et enregistrer l'arrivée.
+- **Recherche** instantanée par nom, téléphone, référence ou service ; badge **En retard** 15 minutes après l'heure du rendez-vous ; navigation vers n'importe quel jour.
+- **Export CSV** de la journée (ouvrable dans Excel) ; raccourci clavier `/` pour vérifier un ticket ; nombre de demandes en attente dans le titre de l'onglet ; bandeau hors connexion.
+- **Récupération d'accès** d'un client qui a changé de téléphone, après vérification de la CIN.
 
-Les comptes, affectations et la disponibilité des boutiques doivent être créés côté backend. La liste de rendez-vous de l'API est limitée aux 100 dernières demandes. Le jeton de session est conservé uniquement en mémoire : actualiser l'onglet demande de se reconnecter.
+La caméra et le scan QR ne sont pas encore intégrés. La session est conservée dans l'onglet (sessionStorage) et disparaît à sa fermeture.
 
 ## Mise en production
 
-`npm run build` produit `dist/`. Servir le dossier en HTTPS. Ajouter l'origine exacte de l'interface à `FRONTEND_URLS` côté backend et redémarrer selon la procédure serveur ; autrement, le navigateur bloquera les appels CORS. Configurer une politique de sécurité et éviter toute publication d'identifiants. Faire un test avec des comptes de deux boutiques avant utilisation réelle.
+`npm run build` produit `dist/`. Servir le dossier en HTTPS. Ajouter l'origine exacte de l'interface à `FRONTEND_URLS` côté backend et redémarrer selon la procédure serveur ; autrement, le navigateur bloquera les appels CORS. Faire un test avec des comptes de deux boutiques avant utilisation réelle.
