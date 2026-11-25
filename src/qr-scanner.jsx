@@ -1,6 +1,33 @@
 import { useEffect, useRef, useState } from 'react';
 import { Modal } from './common';
 
+/** Back camera on tablets and phones; any camera (laptop webcam) as a second try. */
+async function openCamera() {
+  try {
+    return await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
+  } catch (cause) {
+    if (cause?.name === 'NotAllowedError' || cause?.name === 'SecurityError') throw cause;
+    return navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+  }
+}
+
+/** Says what actually went wrong, so the agent knows what to do. */
+function cameraError(cause) {
+  switch (cause?.name) {
+    case 'NotAllowedError':
+    case 'SecurityError':
+      return 'Accès à la caméra refusé. Cliquez sur l’icône à gauche de l’adresse du site, autorisez la caméra, puis réessayez.';
+    case 'NotFoundError':
+    case 'OverconstrainedError':
+      return 'Aucune caméra détectée sur cet appareil. Utilisez une tablette ou un téléphone, ou saisissez la référence à la main.';
+    case 'NotReadableError':
+    case 'AbortError':
+      return 'La caméra est déjà utilisée par une autre application (visio, appareil photo). Fermez-la puis réessayez.';
+    default:
+      return 'La caméra n’a pas pu s’ouvrir. Saisissez la référence à la main.';
+  }
+}
+
 /** Scans every ~200 ms: fast enough to feel instant, light on a tablet battery. */
 const SCAN_EVERY_MS = 200;
 
@@ -49,11 +76,9 @@ export function QrScanner({ onResult, onClose }) {
         };
       }
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
+        stream = await openCamera();
       } catch (cause) {
-        setError(cause?.name === 'NotAllowedError'
-          ? 'Accès à la caméra refusé. Autorisez-le dans le navigateur, ou saisissez la référence à la main.'
-          : 'Aucune caméra utilisable sur cet appareil. Saisissez la référence à la main.');
+        setError(cameraError(cause));
         return;
       }
       if (stopped) { stream.getTracks().forEach(track => track.stop()); return; }
