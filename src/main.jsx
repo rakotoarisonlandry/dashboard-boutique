@@ -4,6 +4,7 @@ import {
   AlertsControl, Empty, Icon, LiveBadge, Login, Modal, Shell, Stat, ToastProvider, addDays, dayKey, downloadCsv, e, formatDate, formatDay, formatTime,
   initials, post, request, timeAgo, useAlerts, useClockRefresh, useConfirm, useDocumentTitle, useLiveStream, useNow, useSession, useToast,
 } from './common';
+import { QrScanner } from './qr-scanner';
 import './style.css';
 
 const STATUS = { pending: 'En attente', confirmed: 'Confirmé', rejected: 'Refusé', cancelled: 'Annulé' };
@@ -319,20 +320,23 @@ function TicketCheck({ base, busy, run, inputRef }) {
   const [ticket, setTicket] = useState(null);
   const [error, setError] = useState('');
   const [checking, setChecking] = useState(false);
-  const check = async event => {
-    event.preventDefault();
-    if (!reference.trim()) return;
+  const [scanning, setScanning] = useState(false);
+  const verify = async value => {
+    if (!value.trim()) return;
     setChecking(true); setError(''); setTicket(null);
-    try { setTicket(await request(`${base}/tickets/${e(reference.trim())}`)); }
+    try { setTicket(await request(`${base}/tickets/${e(value.trim())}`)); }
     catch (err) { setError(err.message); }
     finally { setChecking(false); }
   };
+  const check = event => { event.preventDefault(); void verify(reference); };
+  const scanned = value => { setScanning(false); setReference(value); void verify(value); };
   return <form className="panel" onSubmit={check}>
     <span className="eyebrow">Accueil au guichet</span>
     <h2 style={{ marginTop: 6 }}>Vérifier un ticket</h2>
-    <p>Saisissez la référence affichée sous le QR code du client.</p>
+    <p>Scannez le QR code du ticket, ou saisissez la référence affichée dessous.</p>
+    <button type="button" className="btn primary full" style={{ marginTop: 10 }} onClick={() => setScanning(true)}><Icon name="scan" size={18}/>Scanner le QR code</button>
     <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-      <input ref={inputRef} aria-label="Référence du ticket" value={reference} onChange={event => { setReference(event.target.value); setTicket(null); setError(''); }} placeholder="Référence  ( / )" style={{ flex: 1 }}/>
+      <input ref={inputRef} aria-label="Référence du ticket" value={reference} onChange={event => { setReference(event.target.value); setTicket(null); setError(''); }} placeholder="Ou saisissez la référence (raccourci /)" style={{ flex: 1 }}/>
       <button className="btn dark" aria-label="Vérifier" disabled={checking || !reference.trim()} style={{ marginTop: 7 }}><Icon name="search" size={17}/></button>
     </div>
     {error && <div className="notice" style={{ marginTop: 12, marginBottom: 0 }}>{error}</div>}
@@ -344,6 +348,7 @@ function TicketCheck({ base, busy, run, inputRef }) {
         {ticket.valid && <button type="button" className="btn primary small" disabled={!!busy} onClick={() => void run(ticket.id, () => post(`${base}/tickets/${e(ticket.id)}/check-in`), `Arrivée de ${ticket.customerName} enregistrée.`).then(ok => { if (ok) { setTicket(null); setReference(''); } })}>Enregistrer l’arrivée</button>}
       </div>
     </div>}
+    {scanning && <QrScanner onResult={scanned} onClose={() => setScanning(false)}/>}
   </form>;
 }
 
