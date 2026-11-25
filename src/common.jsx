@@ -57,7 +57,7 @@ const paths = {
   clock: 'M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0ZM12 6v6l4 2', check: 'm5 12 4 4L20 5', close: 'm6 6 12 12M6 18 18 6', plus: 'M12 5v14M5 12h14',
   search: 'M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0Zm-2 6 6 6', bell: 'M5 17h14l-2-4V8A5 5 0 0 0 7 8v5Zm5 4h4', logout: 'M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10',
   refresh: 'M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7', trash: 'M4 7h16M9 7V4h6v3m-8 0 1 14h8l1-14', key: 'M15 7a4 4 0 1 1-3.9 5H3v3h3v3h3v-6M15 7h.01',
-  download: 'M12 2v13m-5-5 5 5 5-5M4 17v5h16v-5', spark: 'm12 2 3 7 7 3-7 3-3 7-3-7-7-3 7-3Z', grid: 'M3 3h8v8H3Zm10 0h8v8h-8ZM3 13h8v8H3Zm10 0h8v8h-8Z', phone: 'M6 2h12v20H6ZM10 18h4',
+  download: 'M12 2v13m-5-5 5 5 5-5M4 17v5h16v-5', scan: 'M3 7V3h4m10 0h4v4m0 10v4h-4M7 21H3v-4M7 12h10', spark: 'm12 2 3 7 7 3-7 3-3 7-3-7-7-3 7-3Z', grid: 'M3 3h8v8H3Zm10 0h8v8h-8ZM3 13h8v8H3Zm10 0h8v8h-8Z', phone: 'M6 2h12v20H6ZM10 18h4',
 };
 export function Icon({ name, size = 20, stroke = 2 }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={paths[name] || paths.spark}/></svg>;
