@@ -91,13 +91,12 @@ export function Login({ title, subtitle, login }) {
   const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
   const [forgot, setForgot] = useState(false); const [sent, setSent] = useState(false);
   return <div className="login-page">
-    <div className="login-brand"><Brand/><h2>Chaque visite en boutique,<br/><span>sans file d’attente.</span></h2><p>Robia IoT · Madagascar</p></div>
+    <div className="login-brand"><Brand/><DemoTicket/><div><h2>Chaque visite en boutique, sans file d’attente.</h2><p style={{ marginTop: 12 }}>Les clients réservent depuis l’application Robia IoT. Vous les accueillez à l’heure prévue.</p></div></div>
     <main className="login-main"><form className="login-card" onSubmit={async event => {
       event.preventDefault(); setBusy(true); setError(''); setSent(false);
       try { if (forgot) { await post('/auth/forgot-password', { email }); setSent(true); } else await login(email, password); }
       catch (err) { setError(err.message); } finally { setBusy(false); }
     }}>
-      <span className="eyebrow">Espace sécurisé</span>
       <h1>{forgot ? 'Mot de passe oublié' : title}</h1>
       <p>{forgot ? 'Saisissez l’adresse de votre compte Robia.' : subtitle}</p>
       <label>Adresse e-mail<input type="email" autoComplete="username" required value={email} onChange={event => setEmail(event.target.value)} placeholder="vous@exemple.mg"/></label>
@@ -307,8 +306,22 @@ export function timeAgo(timestamp, now) {
   return hours < 24 ? `il y a ${hours} h` : `il y a ${Math.round(hours / 24)} j`;
 }
 
-export function Stat({ icon, label, value, caption, hero = false }) {
-  return <div className={`stat ${hero ? 'hero' : ''}`}><div className="stat-icon"><Icon name={icon} size={22}/></div><div><div className="stat-label">{label}</div><strong>{value}</strong><small>{caption}</small></div></div>;
+/** One figure of the dark band. `alert` colors it when it needs action. */
+export function Metric({ value, label, alert = false }) {
+  return <div className={`metric ${alert ? 'alert' : ''}`}><strong>{value}</strong><span>{label}</span></div>;
+}
+
+/* The customer's ticket, as the app shows it: the subject of the login page. */
+const QR_BITS = '1110111010001011101110101011101010111011100010101010001110101111011110100010111010';
+function DemoTicket() {
+  return <div className="demo-ticket" aria-hidden="true">
+    <div className="demo-ticket-top"><small>Rendez-vous confirmé</small><strong>14:30</strong><span>Orange Analakely</span><small>Mardi 26 novembre</small></div>
+    <div className="demo-ticket-cut"/>
+    <div className="demo-ticket-bottom">
+      <svg viewBox="0 0 9 9" shapeRendering="crispEdges">{[...QR_BITS.slice(0, 81)].map((bit, index) => bit === '1' && <rect key={index} x={index % 9} y={Math.floor(index / 9)} width="1" height="1" fill="#202124"/>)}</svg>
+      <div><span className="ticket-code">#A1B2C3</span><br/><span className="tag confirmed">Confirmé</span></div>
+    </div>
+  </div>;
 }
 export function Empty({ icon = 'spark', title, text, children }) {
   return <div className="empty"><div className="icon-tile"><Icon name={icon} size={28}/></div><h3>{title}</h3>{text && <p>{text}</p>}{children}</div>;
