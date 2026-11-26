@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
-  AlertsControl, Empty, Icon, LiveBadge, Login, Modal, Shell, Stat, ToastProvider, addDays, dayKey, downloadCsv, e, formatDate, formatDay, formatTime,
+  AlertsControl, Empty, Icon, LiveBadge, Login, Metric, Modal, Shell, ToastProvider, addDays, dayKey, downloadCsv, e, formatDate, formatDay, formatTime,
   initials, post, request, timeAgo, useAlerts, useClockRefresh, useConfirm, useDocumentTitle, useLiveStream, useNow, useSession, useToast,
 } from './common';
 import { QrScanner } from './qr-scanner';
@@ -46,6 +46,7 @@ function AgentDashboard({ user, logout }) {
   const [fresh, setFresh] = useState([]);
   const seen = useRef(null);
   const ticketInput = useRef(null);
+  const [scanRequest, setScanRequest] = useState(0);
   const selected = useRef({ shop, day }); selected.current = { shop, day };
   const current = shops.find(item => item.id === shop);
   useDocumentTitle(`${queue.length ? `(${queue.length}) ` : ''}Espace boutique · Robia IoT`);
@@ -157,6 +158,9 @@ function AgentDashboard({ user, logout }) {
     waiting: list.filter(item => item.status === 'confirmed' && !item.checkedInAt).length,
     late: list.filter(item => isLate(item, now)).length,
   };
+  // Next client to welcome: earliest open booking of today, late ones kept for an hour.
+  const nextUp = day === today ? list.filter(item => isOpen(item) && Date.parse(item.slot?.startsAt) + 60 * 60_000 > now)
+    .sort((a, b) => Date.parse(a.slot?.startsAt) - Date.parse(b.slot?.startsAt))[0] : null;
   const days = Array.from({ length: 7 }, (_, index) => dayKey(addDays(windowStart, index)));
   const stale = syncedAt && now - syncedAt > 40_000;
   const chooseDay = key => { setDay(key); if (!days.includes(key)) setWindowStart(key); };
@@ -166,13 +170,13 @@ function AgentDashboard({ user, logout }) {
   ]);
 
   const nav = <>
-    <div className="side-label">VOS BOUTIQUES</div>
+    <div className="side-label">Vos boutiques</div>
     <nav className="nav">{shops.map(item => <button key={item.id} className={`nav-item ${item.id === shop ? 'active' : ''}`} onClick={() => setShop(item.id)}>
       <Icon name="shop" size={19}/><span className="nav-copy"><span>{item.name}</span><small>{item.city || item.address || 'Boutique'}</small></span>
       {item.id === shop && counts.queue > 0 && <span className="dot">{counts.queue}</span>}
     </button>)}</nav>
-    <div className="side-label">RACCOURCI</div>
-    <p className="hint" style={{ padding: '0 12px' }}><span className="kbd">/</span> vérifier un ticket</p>
+    <div className="side-label">Raccourci</div>
+    <p className="side-hint"><span className="kbd">/</span> pour vérifier un ticket</p>
   </>;
   const mobileNav = shops.length > 1 && <select aria-label="Boutique" value={shop} onChange={event => setShop(event.target.value)}>{shops.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>;
   const card = item => <BookingCard key={item.id} item={item} now={now} busy={busy} fresh={fresh.includes(item.id)} showDay={view === 'queue'} onConfirm={() => void setStatus(item, 'confirmed')} onRefuse={() => void refuse(item)} onWelcome={() => void welcome(item)} onResult={() => setResultFor(item)}/>;
@@ -182,33 +186,53 @@ function AgentDashboard({ user, logout }) {
       <div className="page-heading">
         <div>
           <div className="date-line">{formatDay(now)} · {formatTime(now)}</div>
-          <h1>Bonjour{user?.name ? ` ${user.name.split(' ')[0]}` : ''}<span className="accent">.</span></h1>
-          <p>{current ? <>Vous gérez <strong>{current.name}</strong>{current.address ? ` · ${current.address}` : ''}</> : 'Accueillez vos clients en toute simplicité.'}</p>
+          <h1>Bonjour{user?.name ? ` ${user.name.split(' ')[0]}` : ''}</h1>
         </div>
-        {shop && <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        {shop && <div className="heading-tools">
           <AlertsControl alerts={alerts}/>
-          <LiveBadge status={live === 'live' ? 'live' : stale ? 'connecting' : 'connecting'}/>
+          <LiveBadge status={live === 'live' && !stale ? 'live' : 'connecting'}/>
           {syncedAt > 0 && <small title={`Dernière synchronisation : ${formatTime(syncedAt)}`}>Mis à jour {timeAgo(syncedAt, now)}</small>}
         </div>}
       </div>
       {error && <div className="notice" role="alert">{error}</div>}
 
-      {loading ? <div className="stats">{[0, 1, 2, 3].map(i => <div key={i} className="skeleton" style={{ height: 92 }}/>)}</div>
+      {loading ? <div className="skeleton" style={{ height: 200 }}/>
         : !shops.length ? <div className="panel"><Empty icon="shop" title="Aucune boutique ne vous est affectée" text="Communiquez l’adresse e-mail de votre compte au propriétaire : il pourra vous ajouter à son équipe depuis l’administration."><p className="ref" style={{ marginTop: 14 }}>{user?.email}</p></Empty></div>
           : <>
-            <div className="stats">
-              <Stat hero={counts.queue > 0} icon="bell" label="À traiter" value={counts.queue} caption="Demandes en attente"/>
-              <Stat icon="calendar" label={day === today ? 'Aujourd’hui' : formatDay(addDays(day, 0), { weekday: 'long', day: 'numeric' })} value={counts.day} caption="Rendez-vous prévus"/>
-              <Stat icon="clock" label="À accueillir" value={counts.waiting} caption={counts.late ? `dont ${counts.late} en retard` : 'Confirmés, pas encore arrivés'}/>
-              <Stat icon="check" label="Arrivés" value={counts.arrived} caption="Clients accueillis"/>
-            </div>
+            <section className="band" aria-label="Accueil">
+              {nextUp ? <div>
+                <div className="band-label">{isLate(nextUp, now) ? 'En retard' : 'Prochain client'} · {current?.name}</div>
+                <div className="band-next">
+                  <span className="band-time">{formatTime(nextUp.slot?.startsAt)}</span>
+                  <div className="band-who">
+                    <strong>{nextUp.customerName}</strong>
+                    <span><span className="ticket-code">#{ticketCode(nextUp.id)}</span> {(nextUp.serviceIds || []).map(id => SERVICES[id] || id).join(', ')}</span>
+                  </div>
+                </div>
+                <div className="band-actions">
+                  <button className="btn primary" disabled={!!busy} onClick={() => void welcome(nextUp)}><Icon name="check" size={18}/>Client arrivé</button>
+                  {nextUp.status === 'pending' && <button className="btn ghost" disabled={!!busy} onClick={() => void setStatus(nextUp, 'confirmed')}>Confirmer</button>}
+                </div>
+              </div> : <div>
+                <div className="band-label">{current?.name}{current?.address ? ` · ${current.address}` : ''}</div>
+                <div className="band-title">{agenda === null ? 'Chargement de la journée…' : day !== today ? `${counts.day} rendez-vous le ${formatDay(addDays(day, 0), { weekday: 'long', day: 'numeric', month: 'long' })}` : counts.day ? 'Tous les clients prévus sont passés.' : 'Aucun rendez-vous aujourd’hui.'}</div>
+                <div className="band-sub">{counts.queue ? `${counts.queue} demande(s) attendent votre réponse.` : 'Les nouvelles demandes apparaissent ici en direct.'}</div>
+                {counts.queue > 0 && <div className="band-actions"><button className="btn primary" onClick={() => setView('queue')}>Voir les demandes</button></div>}
+              </div>}
+              <div className="metrics">
+                <Metric alert={counts.queue > 0} value={counts.queue} label="À traiter"/>
+                <Metric value={counts.day} label={day === today ? 'Prévus aujourd’hui' : 'Prévus ce jour'}/>
+                <Metric alert={counts.late > 0} value={counts.waiting} label={counts.late ? `À accueillir · ${counts.late} en retard` : 'À accueillir'}/>
+                <Metric value={counts.arrived} label="Accueillis"/>
+              </div>
+            </section>
 
             <div className="grid-2">
               <section>
                 <div className="section-head">
                   <div className="tabs" role="tablist">
                     <button role="tab" aria-selected={view === 'agenda'} className={`tab ${view === 'agenda' ? 'active' : ''}`} onClick={() => setView('agenda')}>Agenda</button>
-                    <button role="tab" aria-selected={view === 'queue'} className={`tab ${view === 'queue' ? 'active' : ''}`} onClick={() => setView('queue')}>À traiter{counts.queue ? ` · ${counts.queue}` : ''}</button>
+                    <button role="tab" aria-selected={view === 'queue'} className={`tab ${view === 'queue' ? 'active' : ''}`} onClick={() => setView('queue')}>À traiter{counts.queue > 0 && <span className="count">{counts.queue}</span>}</button>
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
                     {view === 'agenda' && <button className="btn ghost small" disabled={!list.length} onClick={exportDay} title="Exporter la journée (CSV)"><Icon name="download" size={16}/>Exporter</button>}
@@ -218,7 +242,7 @@ function AgentDashboard({ user, logout }) {
 
                 {view === 'agenda' && <div className="day-nav">
                   <button className="day-arrow" aria-label="Jours précédents" onClick={() => setWindowStart(dayKey(addDays(windowStart, -7)))}><Icon name="back" size={18}/></button>
-                  {days.map(key => <button key={key} className={`day-chip ${key === day ? 'active' : ''}`} onClick={() => setDay(key)} aria-pressed={key === day} aria-label={formatDay(addDays(key, 0))}>
+                  {days.map(key => <button key={key} className={`day-chip ${key === day ? 'active' : ''} ${key === today ? 'today' : ''}`} onClick={() => setDay(key)} aria-pressed={key === day} aria-label={formatDay(addDays(key, 0))}>
                     <small>{key === today ? 'Auj.' : formatDay(addDays(key, 0), { weekday: 'short' }).replace('.', '')}</small><strong>{Number(key.slice(8))}</strong>
                   </button>)}
                   <button className="day-arrow" aria-label="Jours suivants" onClick={() => setWindowStart(dayKey(addDays(windowStart, 7)))}><Icon name="arrow" size={18}/></button>
@@ -252,17 +276,17 @@ function AgentDashboard({ user, logout }) {
               </section>
 
               <div className="stack">
-                <TicketCheck base={base} busy={busy} run={run} inputRef={ticketInput}/>
+                <TicketCheck base={base} busy={busy} run={run} inputRef={ticketInput} scanRequest={scanRequest}/>
                 <Recovery base={base} confirm={confirm} run={run}/>
                 <div className="panel">
-                  <span className="eyebrow">Horaires d’accueil</span>
-                  <h3 style={{ marginTop: 6 }}>Lundi – samedi · 08:00 – 16:00</h3>
+                  <h3>Lundi au samedi, de 08:00 à 16:00</h3>
                   <p className="hint">Un client confirmé est signalé « En retard » 15 minutes après l’heure de son rendez-vous.</p>
                 </div>
               </div>
             </div>
           </>}
     </div>
+    {shop && <button className="btn primary fab" onClick={() => setScanRequest(value => value + 1)}><Icon name="scan" size={20}/>Scanner un ticket</button>}
     {resultFor && <ResultDialog item={resultFor} onClose={() => setResultFor(null)} onSubmit={(result, message) => { const item = resultFor; setResultFor(null); void run(item.id, () => post(`${base}/bookings/${e(item.id)}/result`, { result, message }), 'Retour envoyé au client.'); }}/>}
     {confirmDialog}
   </Shell>;
@@ -279,22 +303,24 @@ function BookingCard({ item, now, busy, fresh, showDay, onConfirm, onRefuse, onW
         <strong>{item.customerName} <span className="ticket-code" title="Code affiché sur le ticket du client">#{ticketCode(item.id)}</span></strong>
         <span>{showDay ? `${formatDate(item.slot?.startsAt)} · ` : ''}{item.phone ? <a href={`tel:${item.phone.replace(/\s+/g, '')}`} style={{ color: 'inherit' }}>{item.phone}</a> : 'Téléphone non renseigné'}</span>
       </div>
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+      <div className="booking-tags">
         {late && <span className="tag late">En retard</span>}
         {item.checkedInAt ? <span className="tag arrived">Arrivé · {formatTime(item.checkedInAt)}</span> : <span className={`tag ${item.status}`}>{STATUS[item.status] || item.status}</span>}
       </div>
     </div>
-    <div className="booking-meta">{item.serviceIds?.map(id => <span key={id} className="service-chip">{SERVICES[id] || id}</span>)}<span className="service-chip">Demandé {formatDate(item.createdAt)}</span></div>
+    <div className="booking-meta">{item.serviceIds?.map(id => <span key={id} className="service-chip">{SERVICES[id] || id}</span>)}<small>Demandé le {formatDate(item.createdAt)}</small></div>
     {item.serviceResult && <div className="result-box"><strong style={{ color: item.serviceResult === 'treated' ? 'var(--success)' : 'var(--danger)' }}>{item.serviceResult === 'treated' ? '✓ Demande traitée' : 'Demande non traitée'}</strong>{item.serviceMessage}</div>}
-    {(open || (item.checkedInAt && !item.serviceResult)) && <div className="booking-actions">
+    <div className="booking-foot">
+    {(open || (item.checkedInAt && !item.serviceResult)) ? <div className="booking-actions">
       {open && <button className="btn primary small" disabled={!!busy} onClick={onWelcome}><Icon name="check" size={16}/>{working ? 'Patientez…' : 'Client arrivé'}</button>}
       {item.status === 'pending' && !item.checkedInAt && <>
         <button className="btn success small" disabled={!!busy} onClick={onConfirm}>Confirmer</button>
         <button className="btn danger small" disabled={!!busy} onClick={onRefuse}>Refuser</button>
       </>}
       {item.checkedInAt && !item.serviceResult && <button className="btn soft small" disabled={!!busy} onClick={onResult}><Icon name="bell" size={16}/>Envoyer le retour au client</button>}
-    </div>}
-    <span className="ref">Réf. {item.id}</span>
+    </div> : <span/>}
+    <span className="ref" title="Référence complète, demandée pour une récupération d’accès">Réf. {item.id}</span>
+    </div>
   </article>;
 }
 
@@ -315,7 +341,7 @@ function ResultDialog({ item, onClose, onSubmit }) {
   </Modal>;
 }
 
-function TicketCheck({ base, busy, run, inputRef }) {
+function TicketCheck({ base, busy, run, inputRef, scanRequest }) {
   const [reference, setReference] = useState('');
   const [ticket, setTicket] = useState(null);
   const [error, setError] = useState('');
@@ -328,16 +354,16 @@ function TicketCheck({ base, busy, run, inputRef }) {
     catch (err) { setError(err.message); }
     finally { setChecking(false); }
   };
+  useEffect(() => { if (scanRequest) setScanning(true); }, [scanRequest]);
   const check = event => { event.preventDefault(); void verify(reference); };
   const scanned = value => { setScanning(false); setReference(value); void verify(value); };
   return <form className="panel" onSubmit={check}>
-    <span className="eyebrow">Accueil au guichet</span>
-    <h2 style={{ marginTop: 6 }}>Vérifier un ticket</h2>
-    <p>Scannez le QR code du ticket, ou saisissez la référence affichée dessous.</p>
-    <button type="button" className="btn primary full" style={{ marginTop: 10 }} onClick={() => setScanning(true)}><Icon name="scan" size={18}/>Scanner le QR code</button>
-    <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-      <input ref={inputRef} aria-label="Référence du ticket" value={reference} onChange={event => { setReference(event.target.value); setTicket(null); setError(''); }} placeholder="Ou saisissez la référence (raccourci /)" style={{ flex: 1 }}/>
-      <button className="btn dark" aria-label="Vérifier" disabled={checking || !reference.trim()} style={{ marginTop: 7 }}><Icon name="search" size={17}/></button>
+    <h2>Vérifier un ticket</h2>
+    <p style={{ marginTop: 4 }}>Scannez le QR code du client, ou saisissez la référence imprimée dessous.</p>
+    <button type="button" className="btn primary full" style={{ marginTop: 14 }} onClick={() => setScanning(true)}><Icon name="scan" size={18}/>Scanner le QR code</button>
+    <div className="ticket-row">
+      <input ref={inputRef} aria-label="Référence du ticket" value={reference} onChange={event => { setReference(event.target.value); setTicket(null); setError(''); }} placeholder="Référence du ticket"/>
+      <button className="btn dark" aria-label="Vérifier la référence" disabled={checking || !reference.trim()}><Icon name="search" size={17}/></button>
     </div>
     {error && <div className="notice" style={{ marginTop: 12, marginBottom: 0 }}>{error}</div>}
     {ticket && <div className="ticket-check" aria-live="polite">
@@ -361,10 +387,10 @@ function Recovery({ base, confirm, run }) {
       .then(ok => { if (ok) { setRecoveryId(''); setBookingId(''); setVerified(false); } });
   };
   return <div className="panel">
-    <button className="row-item" style={{ background: 'none', padding: 0 }} onClick={() => setOpen(!open)} aria-expanded={open}>
+    <button className="disclosure" onClick={() => setOpen(!open)} aria-expanded={open}>
       <span className="icon-tile"><Icon name="key" size={20}/></span>
       <span className="row-copy"><strong>Récupération d’accès</strong><small>Client qui a changé de téléphone</small></span>
-      <span style={{ transform: `rotate(${open ? 90 : 0}deg)`, transition: 'transform .2s' }}><Icon name="arrow" size={16}/></span>
+      <Icon name="arrow" size={16}/>
     </button>
     {open && <div style={{ marginTop: 8 }}>
       <label>Référence de la demande<input value={recoveryId} onChange={event => setRecoveryId(event.target.value)}/></label>
